@@ -19,6 +19,15 @@ task :clone do
 
 end
 
+desc "Delete the cache directory and everything within it."
+task :clean_cache do
+  rp = Processor.new
+  rp.clean_cache
+end
+
+task :default => [:clone]
+
+
 # This module clones the various university repositories from the GeoMetadata
 # github account.
 #
@@ -47,10 +56,8 @@ module GitCloner
 
   def update_repo(repo)
     if Dir.exist?("#{@cache_dir}/#{repo.name}")
-      puts "pulling #{repo.name}"
       pull(repo)
     else
-      puts "cloning #{repo.name}"
       clone(repo)
     end
   end
@@ -105,13 +112,20 @@ end
 
 
 module CleanUp
-  def clean_solr
+  def clean_solr_index
     puts "purge solr index"
     # @solr.delete_by_query('*:*')
     # @solr.commit
   end
 
   def clean_cache_dir
+    if Dir.exists?(@cache_dir) 
+      puts "Cleaning up cache directory."
+      FileUtils.remove_entry_secure(@cache_dir) 
+    else
+      puts "No '#{@cache_dir}' directory found. Nothing to clean up."
+    end
+    exit
   end
 end
 
@@ -121,21 +135,34 @@ end
 class Processor
   include GitCloner
   include SolrUpdate
+  include CleanUp
 
   def initialize
     @cache_dir = CACHE_DIR
+    @solr_url = SOLR_URL
+  end
+
+  def set_up
     puts "Create the cache dir if needed."
     Dir.mkdir @cache_dir unless Dir.exist?(@cache_dir)
-    @solr_url = SOLR_URL
     puts "Connect to Solr @ #{@solr_url}"
     # @solr = RSolr.connect :url => @solr_url
   end
 
   def do_it_all
+    set_up
     get_repos.each do |repo|
       update_repo(repo)
     end
     update_all
+  end
+
+  def clean_cache
+    clean_cache_dir
+  end
+
+  def clean_solr
+    clean_solr_index
   end
 
 end

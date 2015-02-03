@@ -15,12 +15,24 @@ CACHE_DIR = ENV.fetch('CACHE_DIR', "cache")
 desc "Makes a clone of the repositories from github"
 task :clone do
   rp = Processor.new
-  rp.do_it_all
+  rp.clone_only
+end
+
+desc "Update Solr index with existing repo files"
+task :solr do
+  rp = Processor.new
+  rp.solr_only
+end
+
+desc "[Default] Clone the OpenGeoMetadata repositories and update Solr."
+task :clone_update do
+  rp = Processor.new
+  rp.update_repos_solr
 
 end
 
 desc "Delete the cache directory and everything within it."
-task :clean_cache do
+task :delete_cache do
   rp = Processor.new
   rp.clean_cache
 end
@@ -31,7 +43,7 @@ task :delete_solr do
   rp.clean_solr
 end
 
-task :default => [:clone]
+task :default => [:clone_update]
 
 
 # This module clones the various university repositories from the GeoMetadata
@@ -59,7 +71,7 @@ module GitCloner
     o.merge "master"
   end
 
-  def update_repo(repo)
+  def clone_repo(repo)
     if Dir.exist?("#{@cache_dir}/#{repo.name}")
       # Cludgion for now. edu.nyu is an empty repo and the script barfs when
       # trying to update an empty repo
@@ -102,7 +114,7 @@ module SolrUpdate
     # @solr.commit
   end
 
-  def update_all
+  def update_index
     get_files.each.with_index { |file, i| 
       solr_update(file)
       if i % 1000 == 0
@@ -154,12 +166,24 @@ class Processor
     # @solr = RSolr.connect :url => @solr_url
   end
 
-  def do_it_all
+  def update_repos_solr
     set_up
     get_repos.each do |repo|
-      update_repo(repo)
+      clone_repo(repo)
     end
-    update_all
+    update_index
+  end
+
+  def clone_only
+    set_up
+    get_repos.each do |repo|
+      clone_repo(repo)
+    end
+  end
+
+  def solr_only
+    set_up
+    update_index
   end
 
   def clean_cache

@@ -25,6 +25,12 @@ task :clean_cache do
   rp.clean_cache
 end
 
+desc "Delete the solr index."
+task :delete_solr do
+  rp = Processor.new
+  rp.clean_solr
+end
+
 task :default => [:clone]
 
 
@@ -35,7 +41,6 @@ module GitCloner
   attr_accessor :repos
 
   def get_repos
-    puts "Returning array of repo names"
     @repos = Github.repos.list(user: "OpenGeoMetadata")
       .select { |n| n.name.start_with? 'edu.' }
     @repos
@@ -56,7 +61,10 @@ module GitCloner
 
   def update_repo(repo)
     if Dir.exist?("#{@cache_dir}/#{repo.name}")
-      pull(repo)
+      # Cludgion for now. edu.nyu is an empty repo and the script barfs when
+      # trying to update an empty repo
+      pull(repo) if repo.name != "edu.nyu"
+      #pull(repo)
     else
       clone(repo)
     end
@@ -78,10 +86,8 @@ module SolrUpdate
 
   # update the database with the assigned repo
   def solr_update(fn)
-    puts "Processing #{fn}"
     if fn =~ /.xml$/
       doc = Nokogiri::XML(File.open(fn, 'rb').read)
-      puts "updating #{fn}"
       # @solr.update :data => doc.to_xml    
     elsif fn =~ /.json$/
       doc = JSON.parse(File.open(fn, 'rb').read)
@@ -93,20 +99,19 @@ module SolrUpdate
 
   # commit the update
   def commit
-    puts "Commit the solr update"
     # @solr.commit
   end
 
   def update_all
     get_files.each.with_index { |file, i| 
-      # solr_update(file)
+      solr_update(file)
       if i % 1000 == 0
-        #commit
-        puts "1000 files reached, calling commit"
+        puts "Commit the solr update (every 1000 files)."
+        commit
       end
     }
-    #commit 
-    puts "Calling commit for final time."
+    puts "Committing final update to solr."
+    commit 
   end
 end
 

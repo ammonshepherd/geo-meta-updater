@@ -8,7 +8,7 @@ require 'dotenv'
 Dotenv.load
 
 
-SOLR_URL = ENV.fetch('SOLR_URL', "http://localhost:8983/solr")
+SOLR_URL = ENV.fetch('SOLR_URL', "http://192.168.59.103:49154/solr/")
 CACHE_DIR = ENV.fetch('CACHE_DIR', "cache")
 
 
@@ -73,7 +73,7 @@ module GitCloner
 
   def clone_repo(repo)
     if Dir.exist?("#{@cache_dir}/#{repo.name}")
-      # Cludgion for now. edu.nyu is an empty repo and the script barfs when
+      # Temporary patch for now. edu.nyu is an empty repo and the script barfs when
       # trying to update an empty repo
       pull(repo) if repo.name != "edu.nyu"
       #pull(repo)
@@ -98,32 +98,40 @@ module SolrUpdate
 
   # update the database with the assigned repo
   def solr_update(fn)
-    if fn =~ /.xml$/
-      doc = Nokogiri::XML(File.open(fn, 'rb').read)
-      # @solr.update :data => doc.to_xml    
-    elsif fn =~ /.json$/
-      doc = JSON.parse(File.open(fn, 'rb').read)
-      @solr.add doc
-    else
-      raise RuntimeError, "Unknown file type: #{fn}"
+    doc = File.read(fn)
+    #@solr.update data: doc
+    begin
+      @solr.update data: doc
+    rescue RSolr::Error::Http => error
+      puts error
     end
+    # if fn =~ /.xml$/
+    #   doc = Nokogiri::XML(File.open(fn, 'rb').read)
+    #   @solr.update :data => doc.to_xml    
+    # elsif fn =~ /.json$/
+    #   doc = JSON.parse(File.open(fn, 'rb').read)
+    #   @solr.add doc
+    # else
+    #   raise RuntimeError, "Unknown file type: #{fn}"
+    # end
   end
 
   # commit the update
   def commit
-    # @solr.commit
+    @solr.commit
   end
 
   def update_index
     get_files.each.with_index { |file, i| 
       solr_update(file)
-      if i % 1000 == 0
-        puts "Commit the solr update (every 1000 files)."
-        commit
-      end
-    }
-    puts "Committing final update to solr."
-    commit 
+      puts file
+       if i % 1000 == 0
+         puts "Commit the solr update (every 1000 files)."
+         commit
+       end
+     }
+     puts "Committing final update to solr."
+     commit 
   end
 end
 
@@ -163,7 +171,7 @@ class Processor
     puts "Create the cache dir if needed."
     Dir.mkdir @cache_dir unless Dir.exist?(@cache_dir)
     puts "Connect to Solr @ #{@solr_url}"
-    # @solr = RSolr.connect :url => @solr_url
+    @solr = RSolr.connect :url => @solr_url
   end
 
   def update_repos_solr
